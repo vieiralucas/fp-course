@@ -312,6 +312,9 @@ sequence =
     (\ka kl -> pure (:.) <*> ka <*> kl)
     (pure Nil)
 
+sequence_ :: Applicative k => List (k a) -> k ()
+sequence_ = foldRight (>>) (pure ())
+
 -- | Replicate an effect a given number of times.
 --
 -- /Tip:/ Use `Course.List#replicate`.

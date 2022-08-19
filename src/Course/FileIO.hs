@@ -1,15 +1,15 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Course.FileIO where
 
-import Course.Core
 import Course.Applicative
-import Course.Monad
+import Course.Core
 import Course.Functor
 import Course.List
+import Course.Monad
 
 {-
 
@@ -82,49 +82,51 @@ the contents of c
 -- Given the file name, and file contents, print them.
 -- Use @putStrLn@.
 printFile ::
-  FilePath
-  -> Chars
-  -> IO ()
-printFile =
-  error "todo: Course.FileIO#printFile"
+  FilePath ->
+  Chars ->
+  IO ()
+printFile name contents =
+  do
+    _ <- putStrLn name
+    putStrLn contents
 
 -- Given a list of (file name and file contents), print each.
 -- Use @printFile@.
 printFiles ::
-  List (FilePath, Chars)
-  -> IO ()
-printFiles =
-  error "todo: Course.FileIO#printFiles"
+  List (FilePath, Chars) ->
+  IO ()
+printFiles files = sequence_ (uncurry printFile <$> files)
 
 -- Given a file name, return (file name and file contents).
 -- Use @readFile@.
 getFile ::
-  FilePath
-  -> IO (FilePath, Chars)
-getFile =
-  error "todo: Course.FileIO#getFile"
+  FilePath ->
+  IO (FilePath, Chars)
+getFile path =
+  (,) path <$> readFile path
 
 -- Given a list of file names, return list of (file name and file contents).
 -- Use @getFile@.
 getFiles ::
-  List FilePath
-  -> IO (List (FilePath, Chars))
-getFiles =
-  error "todo: Course.FileIO#getFiles"
+  List FilePath ->
+  IO (List (FilePath, Chars))
+getFiles = mapM getFile
+  where
+    mapM f = sequence . map f
 
 -- Given a file name, read it and for each line in that file, read and print contents of each.
 -- Use @getFiles@, @lines@, and @printFiles@.
 run ::
-  FilePath
-  -> IO ()
-run =
-  error "todo: Course.FileIO#run"
+  FilePath ->
+  IO ()
+run path =
+  printFiles =<< getFiles . lines . snd =<< getFile path
 
 -- /Tip:/ use @getArgs@ and @run@
 main ::
   IO ()
 main =
-  error "todo: Course.FileIO#main"
+  (sequence_ <$> (run <$>)) =<< getArgs
 
 ----
 

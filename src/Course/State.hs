@@ -1,18 +1,19 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Course.State where
 
-import Course.Core
-import qualified Prelude as P
-import Course.Optional
-import Course.List
-import Course.Functor
 import Course.Applicative
+import Course.Core
+import Course.Functor
+import Course.List
 import Course.Monad
+import Course.Optional
 import qualified Data.Set as S
+import Debug.Trace
+import qualified Prelude as P
 
 -- $setup
 -- >>> import Test.QuickCheck.Function
@@ -24,16 +25,16 @@ import qualified Data.Set as S
 -- >>> instance Arbitrary a => Arbitrary (List a) where arbitrary = P.fmap listh arbitrary
 
 -- A `State` is a function from a state value `s` to (a produced value `a`, and a resulting state `s`).
-newtype State s a =
-  State (
-    s
-    -> (a, s)
-  )
+newtype State s a
+  = State
+      ( s ->
+        (a, s)
+      )
 
 runState ::
-  State s a
-  -> s
-  -> (a, s)
+  State s a ->
+  s ->
+  (a, s)
 runState (State f) =
   f
 
@@ -41,21 +42,20 @@ runState (State f) =
 --
 -- prop> \(Fun _ f) s -> exec (State f) s == snd (runState (State f) s)
 exec ::
-  State s a
-  -> s
-  -> s
-exec =
-  error "todo: Course.State#exec"
+  State s a ->
+  s ->
+  s
+exec state = snd . runState state
 
 -- | Run the `State` seeded with `s` and retrieve the resulting value.
 --
 -- prop> \(Fun _ f) s -> eval (State f) s == fst (runState (State f) s)
 eval ::
-  State s a
-  -> s
-  -> a
-eval =
-  error "todo: Course.State#eval"
+  State s a ->
+  s ->
+  a
+eval state =
+  fst . runState state
 
 -- | A `State` where the state also distributes into the produced value.
 --
@@ -63,18 +63,16 @@ eval =
 -- (0,0)
 get ::
   State s s
-get =
-  error "todo: Course.State#get"
+get = State (\s -> (s, s))
 
 -- | A `State` where the resulting state is seeded with the given value.
 --
 -- >>> runState (put 1) 0
 -- ((),1)
 put ::
-  s
-  -> State s ()
-put =
-  error "todo: Course.State#put"
+  s ->
+  State s ()
+put s = State $ const ((), s)
 
 -- | Implement the `Functor` instance for `State s`.
 --
@@ -82,11 +80,11 @@ put =
 -- (10,6)
 instance Functor (State s) where
   (<$>) ::
-    (a -> b)
-    -> State s a
-    -> State s b
-  (<$>) =
-    error "todo: Course.State#(<$>)"
+    (a -> b) ->
+    State s a ->
+    State s b
+  (<$>) f sa =
+    State (first f . runState sa)
 
 -- | Implement the `Applicative` instance for `State s`.
 --
@@ -100,16 +98,21 @@ instance Functor (State s) where
 -- (10,["apple","banana"])
 instance Applicative (State s) where
   pure ::
-    a
-    -> State s a
-  pure =
-    error "todo: Course.State pure#instance (State s)"
+    a ->
+    State s a
+  pure a =
+    State ((,) a)
   (<*>) ::
-    State s (a -> b)
-    -> State s a
-    -> State s b
-  (<*>) =
-    error "todo: Course.State (<*>)#instance (State s)"
+    State s (a -> b) ->
+    State s a ->
+    State s b
+  (<*>) sf sa =
+    State
+      ( \s ->
+          let (f, s') = runState sf s
+              sb = f <$> sa
+           in runState sb s'
+      )
 
 -- | Implement the `Monad` instance for `State s`.
 --
@@ -123,11 +126,16 @@ instance Applicative (State s) where
 -- (10,16)
 instance Monad (State s) where
   (=<<) ::
-    (a -> State s b)
-    -> State s a
-    -> State s b
-  (=<<) =
-    error "todo: Course.State (=<<)#instance (State s)"
+    (a -> State s b) ->
+    State s a ->
+    State s b
+  (=<<) f sa =
+    State
+      ( \s ->
+          let (a, s') = runState sa s
+              sb = f a
+           in runState sb s'
+      )
 
 -- | Find the first element in a `List` that satisfies a given predicate.
 -- It is possible that no element is found, hence an `Optional` result.
@@ -144,12 +152,14 @@ instance Monad (State s) where
 -- >>> let p x = (\s -> (const $ pure (x == 'i')) =<< put (1+s)) =<< get in runState (findM p $ listh ['a'..'h']) 0
 -- (Empty,8)
 findM ::
-  Monad f =>
-  (a -> f Bool)
-  -> List a
-  -> f (Optional a)
-findM =
-  error "todo: Course.State#findM"
+  Monad m =>
+  (a -> m Bool) ->
+  List a ->
+  m (Optional a)
+findM f Nil = pure Empty
+findM f (a :. as) = do
+  b <- f a
+  if b then pure $ Full a else findM f as
 
 -- | Find the first element in a `List` that repeats.
 -- It is possible that no element repeats, hence an `Optional` result.
@@ -163,10 +173,12 @@ findM =
 -- prop> \xs -> case firstRepeat xs of Empty -> True; Full x -> let (l, (rx :. rs)) = span (/= x) xs in let (l2, r2) = span (/= x) rs in let l3 = hlist (l ++ (rx :. Nil) ++ l2) in nub l3 == l3
 firstRepeat ::
   Ord a =>
-  List a
-  -> Optional a
-firstRepeat =
-  error "todo: Course.State#firstRepeat"
+  List a ->
+  Optional a
+firstRepeat = inner S.empty
+  where
+    inner s (h :. t) = if S.member h s then Full h else inner (S.insert h s) t
+    inner _ Nil = Empty
 
 -- | Remove all duplicate elements in a `List`.
 -- /Tip:/ Use `filtering` and `State` with a @Data.Set#Set@.
@@ -176,10 +188,11 @@ firstRepeat =
 -- prop> \xs -> distinct xs == distinct (flatMap (\x -> x :. x :. Nil) xs)
 distinct ::
   Ord a =>
+  List a ->
   List a
-  -> List a
-distinct =
-  error "todo: Course.State#distinct"
+distinct = snd . foldRight f (S.empty, Nil)
+  where
+    f a (s, as) = if S.member a s then (s, as) else (S.insert a s, a :. as)
 
 -- | A happy number is a positive integer, where the sum of the square of its digits eventually reaches 1 after repetition.
 -- In contrast, a sad number (not a happy number) is where the sum of the square of its digits never reaches 1
@@ -203,7 +216,27 @@ distinct =
 -- >>> isHappy 44
 -- True
 isHappy ::
-  Integer
-  -> Bool
-isHappy =
-  error "todo: Course.State#isHappy"
+  Integer ->
+  Bool
+isHappy n =
+  let ns = n :. produceList n
+   in case firstRepeat ns of
+        Full d -> d == 1
+        Empty -> True
+  where
+    produceList :: Integer -> List Integer
+    produceList n =
+      let s = sumOfSquares n
+       in s :. produceList s
+
+sumOfSquares :: Integer -> Integer
+sumOfSquares n =
+  let ds = digits n
+      squares = uncurry (*) <$> zip ds ds
+   in foldRight (+) 0 squares
+
+digits :: Integer -> List Integer
+digits n =
+  let d = mod n 10
+      r = div n 10
+   in reverse $ d :. if r < 10 then r :. Nil else digits r
